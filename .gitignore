@@ -1,0 +1,10 @@
+.code-crawler
+
+# Entrance
+entrance-api/out
+
+# Menu
+menu/.zig-cache
+menu/zig-out
+menu/data
+menu/mongo_libs

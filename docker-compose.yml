@@ -1,0 +1,47 @@
+services:
+  entrance-api:
+    build:
+      context: ./entrance-api
+      dockerfile: dockerfile
+    container_name: entrance-service
+    ports:
+      - "3000:3000"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - food-network
+  menu:
+    build:
+      context: ./menu
+      dockerfile: dockerfile
+    container_name: menu-service
+    ports:
+      - "21991:21991"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - food-network
+  mongodb:
+    image: mongo:latest
+    container_name: menudb
+    ports:
+      - "27017:27017"
+    volumes:
+      - ./menu/data:/data/db
+      - ./menu/mongo-setup:/docker-entrypoint-initdb.d
+    environment:
+      MONGO_INITDB_DATABASE: "menudb"
+    healthcheck:
+      # From a Stack Overflow answer
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 5s
+      timeout: 1s
+      retries: 5
+      start_period: 2s
+    networks:
+      - food-network
+networks:
+  food-network:
+    driver: bridge

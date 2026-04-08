@@ -1,0 +1,9 @@
+FROM nimlang/nim:1.6.2
+
+WORKDIR /usr/local/app
+
+RUN mkdir out
+COPY src src
+
+CMD ["nim", "c", "-o:out/main", "-d:release", "-r", "src/main.nim"]
+EXPOSE 3000/tcp
