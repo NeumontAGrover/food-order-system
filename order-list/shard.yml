@@ -1,0 +1,13 @@
+name: order-list
+version: 1.0.0
+
+authors:
+  - NeumontAGrover <agrover@student.neumont.edu>
+
+targets:
+  order-list:
+    main: src/order-list.cr
+
+crystal: ">= 1.19.1"
+
+license: MIT

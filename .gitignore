@@ -6,3 +6,10 @@ menu/.zig-cache
 menu/zig-out
 menu/data
 menu/mongo_libs
+
+# Order List
+order-list/docs/
+order-list/lib/
+order-list/bin/
+order-list/.shards/
+*.dwarf
