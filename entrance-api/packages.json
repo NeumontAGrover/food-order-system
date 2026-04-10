@@ -1,0 +1,11 @@
+[
+  {
+    "name": "nim-amqp",
+    "url": "https://github.com/benumbed/nim-amqp",
+    "method": "git",
+    "tags": ["amqp", "rabbitmq"],
+    "description": "AMQP 0-9-1 implementation in Nim",
+    "license": "BSD 3-Clause",
+    "web": "https://github.com/benumbed/nim-amqp"
+  }
+]

@@ -1,16 +1,16 @@
 services:
-  entrance-api:
-    build:
-      context: ./entrance-api
-      dockerfile: dockerfile
-    container_name: entrance-service
-    ports:
-      - "3000:3000"
-    depends_on:
-      mongodb:
-        condition: service_healthy
-    networks:
-      - food-network
+  # entrance-api:
+  #   build:
+  #     context: ./entrance-api
+  #     dockerfile: dockerfile
+  #   container_name: entrance-service
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     mongodb:
+  #       condition: service_healthy
+  #   networks:
+  #     - food-network
   menu:
     build:
       context: ./menu
@@ -40,6 +40,15 @@ services:
       timeout: 1s
       retries: 5
       start_period: 2s
+    networks:
+      - food-network
+  lavinmq:
+    image: cloudamqp/lavinmq:pr-1844
+    container_name: lavinmq
+    ports:
+      - "15672:5672"
+    volumes:
+      - ./lavin:/tmp/amqp
     networks:
       - food-network
 networks:
