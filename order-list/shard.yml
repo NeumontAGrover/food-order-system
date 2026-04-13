@@ -1,13 +1,18 @@
-name: order-list
+name: order_list
 version: 1.0.0
 
 authors:
   - NeumontAGrover <agrover@student.neumont.edu>
 
 targets:
-  order-list:
-    main: src/order-list.cr
+  order_list:
+    main: src/order_list.cr
 
 crystal: ">= 1.19.1"
+
+dependencies:
+  duckdb:
+    github: amauryt/crystal-duckdb
+    version: ~> 0.2.5
 
 license: MIT

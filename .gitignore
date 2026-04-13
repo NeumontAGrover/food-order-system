@@ -12,4 +12,6 @@ order-list/docs/
 order-list/lib/
 order-list/bin/
 order-list/.shards/
+order-list/data
+order-list/shard.lock
 *.dwarf

@@ -1,0 +1,24 @@
+FROM crystallang/crystal:1
+
+WORKDIR /usr/local/app
+
+# Source - https://stackoverflow.com/a/34571766
+# Posted by Gilles Quénot, modified by community. See post 'Timeline' for change history
+# Retrieved 2026-04-12, License - CC BY-SA 4.0
+RUN apt-get -y update
+RUN apt-get -y install curl
+RUN apt-get -y install unzip
+RUN curl -s https://install.duckdb.org/v1.5.1/libduckdb-linux-arm64.zip -o /usr/lib/libduckdb-linux-arm64.zip
+RUN unzip /usr/lib/libduckdb-linux-arm64.zip -d /usr/lib
+ENV CRYSTAL_LIBRARY_PATH=/usr/lib
+
+RUN mkdir data
+
+COPY src src
+COPY shard.yml shard.yml
+COPY data data
+
+RUN shards install
+
+CMD ["shards", "run", "order_list"]
+EXPOSE 45854
