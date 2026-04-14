@@ -1,7 +1,7 @@
 require "duckdb"
 
 module DuckClient
-  alias FoodItem = {"foodName" : String, "price" : Float32, "quantity" : UInt32}
+  alias FoodItem = Hash(String, Float32 | String | UInt32)
 
   CONNECTION_STRING = "duckdb://./data/orders.db"
 
@@ -10,7 +10,7 @@ module DuckClient
       begin
         DB.connect CONNECTION_STRING do |connection|
           connection.exec "CREATE TABLE IF NOT EXISTS order_list(
-            uid UBIGINT PRIMARY KEY NOT NULL,
+            uid UBIGINT NOT NULL,
             food_name TEXT NOT NULL,
             price FLOAT NOT NULL,
             quantity UINTEGER NOT NULL
@@ -23,9 +23,9 @@ module DuckClient
       end
     end
 
-    def add_item(uid : UInt64, food_name : String, price : Float32, quantity : UInt32)
+    def add_item(uid : UInt64, item : FoodItem)
       DB.connect CONNECTION_STRING do |connection|
-        connection.exec "INSERT INTO order_list VALUES(?, ?, ?, ?)", uid, food_name, price, quantity
+        connection.exec "INSERT INTO order_list VALUES(?, ?, ?, ?)", uid, item["foodName"], item["price"], item["quantity"]
       end
     end
 
@@ -46,21 +46,21 @@ module DuckClient
       return items
     end
 
-    def update_quantity(uid : UInt64, new_quantity : UInt32)
+    def update_quantity(uid : UInt64, food_name : String, new_quantity : UInt32)
       DB.connect CONNECTION_STRING do |connection|
-        connection.exec "UPDATE order_list SET quantity = ? WHERE uid = ?", new_quantity, uid
+        connection.exec "UPDATE order_list SET quantity = ? WHERE uid = ? AND food_name = ?", new_quantity, uid, food_name
       end
     end
     
-    def remove_item(uid : UInt64)
+    def remove_item(uid : UInt64, food_name)
       DB.connect CONNECTION_STRING do |connection|
-        connection.exec "DELETE FROM order_list WHERE uid = ?", uid
+        connection.exec "DELETE FROM order_list WHERE uid = ? AND food_name = ?", uid, food_name
       end
     end
     
     def clear_list(uid : UInt64)
       DB.connect CONNECTION_STRING do |connection|
-        connection.exec "DELETE FROM order_list"
+        connection.exec "DELETE FROM order_list WHERE uid = ?", uid
       end
     end
   end
