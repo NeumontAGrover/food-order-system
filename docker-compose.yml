@@ -33,6 +33,15 @@ services:
       - 45854:45854
     networks:
       - food-network
+  authentication:
+    build:
+      context: ./authentication
+      dockerfile: dockerfile
+    container_name: authentication-service
+    ports:
+      - 32456:32456
+    networks:
+      - food-network
 
   mongodb:
     image: mongo:latest
@@ -53,21 +62,13 @@ services:
       start_period: 2s
     networks:
       - food-network
-  # duckdb:
-  #   image: codieplusplus/duckdb:latest
-  #   container_name: duckdb
-  #   ports:
-  #     - 8482:8482
-  #   volumes:
-  #     - ./order-list/data:/app
-  #   healthcheck:
-  #     test: echo 1
-  #     interval: 5s
-  #     timeout: 1s
-  #     retries: 5
-  #     start_period: 3s
-  #   networks:
-  #     - food-network
+  redis:
+    image: redis:latest
+    container_name: redis-auth
+    ports:
+      - 6379:6379
+    networks:
+      - food-network
 
   lavinmq:
     image: cloudamqp/lavinmq:pr-1844

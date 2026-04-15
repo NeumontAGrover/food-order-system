@@ -8,6 +8,7 @@ menu/.zig-cache
 menu/zig-out
 menu/data
 menu/mongo_libs
+menu/src/headers
 
 # Order List
 order-list/docs/
@@ -17,3 +18,7 @@ order-list/.shards/
 order-list/data
 order-list/shard.lock
 *.dwarf
+
+# Authentication
+authentication/target
+authentication/Cargo.lock
