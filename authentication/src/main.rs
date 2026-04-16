@@ -4,14 +4,22 @@ use hyper::{server::conn::http1, service::service_fn};
 use hyper_util::rt::TokioIo;
 use tokio::net::{TcpListener, TcpStream};
 
+use crate::{postgres_client::PostgresClient, server_handler::ServerInstance};
+
 mod server_handler;
-mod user_db;
+mod postgres_client;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let address = SocketAddr::from(([127, 0, 0, 1], 32456));
+    let address = SocketAddr::from(([0, 0, 0, 0], 32456));
     let listener = TcpListener::bind(address).await?;
 
+    match PostgresClient::new().await?.create_tables().await {
+        Ok(code) => if code != 0 { panic!("Could not create tables ({})", code) },
+        Err(err) => panic!("Could not create tables ({})", err.as_db_error().unwrap().message())
+    };
+
+    println!("Running the authentication service on http://authentication-service:32456");
     loop {
         let (stream, _) = listener.accept().await?;
 
@@ -22,7 +30,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
 async fn serve_request(io: TokioIo<TcpStream>) {
     if let Err(err) = http1::Builder::new()
-        .serve_connection(io, service_fn(server_handler::serve))
+        .serve_connection(io, service_fn(|req| async move {
+            let server_instance = ServerInstance::new().await;
+            server_instance.serve(req).await
+        }))
         .await
     {
         eprintln!("Could not serve the connection ({:?})", err);

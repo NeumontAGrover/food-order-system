@@ -40,6 +40,9 @@ services:
     container_name: authentication-service
     ports:
       - 32456:32456
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - food-network
 
@@ -67,6 +70,24 @@ services:
     container_name: redis-auth
     ports:
       - 6379:6379
+    networks:
+      - food-network
+  postgres:
+    image: postgres:latest
+    container_name: postgresdb
+    ports:
+      - 5432:5432
+    volumes:
+      - ./postgres:/data/db
+    environment:
+      POSTGRES_USER: foodguy
+      POSTGRES_PASSWORD: foodServiceDB
+    healthcheck:
+      test: echo 1
+      interval: 5s
+      timeout: 1s
+      retries: 5
+      start_period: 2s
     networks:
       - food-network
 
