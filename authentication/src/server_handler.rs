@@ -337,7 +337,7 @@ impl ServerInstance {
                     Some(claims) => {
                         let is_expired = self.redis.is_token_expired(claims.uid).await; 
                         println!("Current token, (expired: {}): {:?}", is_expired, claims);
-                        if !claims.admin || is_expired {
+                        if is_expired || (claims.uid != uid && !claims.admin) {
                             *status = StatusCode::UNAUTHORIZED
                         }
                     },
@@ -518,22 +518,26 @@ impl ServerInstance {
                     },
                     None => *status = StatusCode::INTERNAL_SERVER_ERROR,
                 }
-            }
+            },
             None => *status = StatusCode::UNAUTHORIZED,
         }
 
-        let user = self.postgres.get_user(uid).await;
-        if user.is_some() {
-            let delete_result = self.postgres.delete_user(uid).await;
-            match delete_result {
-                Ok(rows_deleted) => println!("Rows deleted ({})", rows_deleted),
-                Err(err) => {
-                    eprintln!("User was not deleted ({})", err.as_db_error().unwrap().message());
-                    *status = StatusCode::INTERNAL_SERVER_ERROR;
-                },
-            };
-        } else {
-            *status = StatusCode::NOT_FOUND;
+        if *status == StatusCode::OK {
+            let user = self.postgres.get_user(uid).await;
+            if user.is_some() {
+                let delete_result = self.postgres.delete_user(uid).await;
+                match delete_result {
+                    Ok(rows_deleted) => println!("Rows deleted ({})", rows_deleted),
+                    Err(err) => {
+                        eprintln!("User was not deleted ({})", err.as_db_error().unwrap().message());
+                        *status = StatusCode::INTERNAL_SERVER_ERROR;
+                    },
+                };
+
+                self.redis.remove_token(uid).await.unwrap();
+            } else {
+                *status = StatusCode::NOT_FOUND;
+            }
         }
 
         match *status {

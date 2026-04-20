@@ -148,8 +148,8 @@ impl PostgresClient {
 
     pub async fn update_user(&self, uid: i32, user: &User) -> Result<u64, Error> {
         let sql_statement = "UPDATE users
-            SET username = $1::TEXT, first_name = $2::TEXT, last_name = $3::TEXT, admin = $4::BOOLEAN
-            WHERE uid = $5::INT
+            SET username = $1::TEXT, first_name = $2::TEXT, last_name = $3::TEXT
+            WHERE uid = $4::INT
         ";
         self.client.execute(sql_statement, &[&user.username, &user.first_name, &user.last_name, &uid]).await
     }

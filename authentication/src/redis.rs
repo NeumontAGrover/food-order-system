@@ -16,6 +16,12 @@ impl RedisClient {
         self.client.set_ex::<_, _, ()>(key, token, 604800).await?;
         Ok(())
     }
+
+    pub async fn remove_token(&mut self, uid: i32) -> Result<(), RedisError> {
+        let key = format!("user:{}", uid);
+        self.client.del::<_, ()>(key).await?;
+        Ok(())
+    }
     
     pub async fn is_token_expired(&mut self, uid: i32) -> bool {
         let key = format!("user:{}", uid);

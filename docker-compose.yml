@@ -78,7 +78,7 @@ services:
     ports:
       - 5432:5432
     volumes:
-      - ./postgres:/data/db
+      - ./postgres:/var/lib/postgresql/18/docker
     environment:
       POSTGRES_USER: foodguy
       POSTGRES_PASSWORD: foodServiceDB
