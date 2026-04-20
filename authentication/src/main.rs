@@ -8,14 +8,16 @@ use crate::{postgres_client::PostgresClient, server_handler::ServerInstance};
 
 mod server_handler;
 mod postgres_client;
+mod redis;
+mod jwt;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let address = SocketAddr::from(([0, 0, 0, 0], 32456));
     let listener = TcpListener::bind(address).await?;
 
-    match PostgresClient::new().await?.create_tables().await {
-        Ok(code) => if code != 0 { panic!("Could not create tables ({})", code) },
+    match PostgresClient::new().await?.setup_client().await {
+        Ok(_) => (),
         Err(err) => panic!("Could not create tables ({})", err.as_db_error().unwrap().message())
     };
 
@@ -31,7 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 async fn serve_request(io: TokioIo<TcpStream>) {
     if let Err(err) = http1::Builder::new()
         .serve_connection(io, service_fn(|req| async move {
-            let server_instance = ServerInstance::new().await;
+            let mut server_instance = ServerInstance::new().await;
             server_instance.serve(req).await
         }))
         .await
