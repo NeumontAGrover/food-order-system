@@ -36,10 +36,24 @@ impl ServerInstance {
             (&Method::POST, "/register") => self.register(req).await,
             (&Method::POST, "/login") => self.login(req).await,
             (&Method::GET, "/users") => self.get_users(req).await,
-            // (&Method::GET, "/user") => self.get_user(req).await,
-            // (&Method::PATCH, "/user") => self.update_user(req).await,
-            // (&Method::DELETE, "/user") => self.delete_user(req).await,
             _ => {
+                if req.method() == &Method::GET {
+                    let segments: Vec<&str> = req.uri().path().split('/').collect();
+                    if segments[1].eq("user") {
+                        return self.get_user(req).await;
+                    }
+                } else if req.method() == &Method::PATCH {
+                    let segments: Vec<&str> = req.uri().path().split('/').collect();
+                    if segments[1].eq("user") {
+                        return self.update_user(req).await;
+                    }
+                } else if req.method() == &Method::DELETE {
+                    let segments: Vec<&str> = req.uri().path().split('/').collect();
+                    if segments[1].eq("user") {
+                        return self.delete_user(req).await;
+                    }
+                }
+
                 let mut response = Response::new(
                     self.create_message("{\"message\":\"Invalid Endpoint\"}")
                 );
@@ -96,11 +110,7 @@ impl ServerInstance {
 
                 let hashed = hash_password(password.unwrap().as_slice());
 
-                let add_result = self.postgres.add_user(
-                    &postgres_user,
-                    hashed.as_str()
-                ).await;
-
+                let add_result = self.postgres.add_user(&postgres_user, hashed.as_str()).await;
                 match add_result {
                     Ok(rows_changed) => println!("Rows added ({})", rows_changed),
                     Err(err) => {
@@ -248,20 +258,11 @@ impl ServerInstance {
         let status = response.status_mut();
         *status = StatusCode::OK;
 
-        let token = match req.headers().get("Authorization") {
-            Some(bearer) => {
-                let (_, token) = bearer.to_str().unwrap().split_once(' ').unwrap();
-                Some(token)
-            },
-            None => {
-                *status = StatusCode::UNAUTHORIZED;
-                None
-            },
-        };
+        let token = self.get_token_from_request(&req);
         
         match token {
             Some(token) => {
-                let claims = match jwt::decode_jwt(token) {
+                let claims = match jwt::decode_jwt(token.as_ref()) {
                     Ok(claims) => Some(claims),
                     Err(_) => {
                         *status = StatusCode::FORBIDDEN;
@@ -293,14 +294,267 @@ impl ServerInstance {
                     self.create_message(format!("{{\"users\":\"{}\"}}", json_str))
                 );
             },
+            StatusCode::UNAUTHORIZED => {
+                response = Response::new(
+                    self.create_message("{\"message\":\"Insufficient access or token is invalid or missing\"}")
+                );
+            },
             StatusCode::FORBIDDEN => {
                 response = Response::new(
                     self.create_message("{\"message\":\"Tampering with the JWT is forbidden\"}")
                 );
             },
+            _ => {
+                response = Response::new(
+                    self.create_message("{\"message\":\"An error occurred\"}")
+                );
+            }
+        }
+
+        Ok(response)
+    }
+    
+    pub async fn get_user(&mut self, req: Request<hyper::body::Incoming>) -> ServerResult {
+        let uid = req.uri().path().split('/').collect::<Vec<&str>>()[2].parse::<i32>().unwrap();
+
+        let mut response = Response::new(self.create_message(""));
+        let status = response.status_mut();
+        *status = StatusCode::OK;
+
+        let token = self.get_token_from_request(&req);
+        
+        match token {
+            Some(token) => {
+                let claims = match jwt::decode_jwt(token.as_ref()) {
+                    Ok(claims) => Some(claims),
+                    Err(_) => {
+                        *status = StatusCode::FORBIDDEN;
+                        None
+                    },
+                };
+                
+                match claims {
+                    Some(claims) => {
+                        let is_expired = self.redis.is_token_expired(claims.uid).await; 
+                        println!("Current token, (expired: {}): {:?}", is_expired, claims);
+                        if !claims.admin || is_expired {
+                            *status = StatusCode::UNAUTHORIZED
+                        }
+                    },
+                    None => *status = StatusCode::INTERNAL_SERVER_ERROR,
+                }
+            }
+            None => *status = StatusCode::UNAUTHORIZED,
+        }
+
+        let user = match self.postgres.get_user(uid).await {
+            Some(user) => Some(user),
+            None => {
+                *status = StatusCode::NOT_FOUND;
+                None
+            },
+        };
+
+        match *status {
+            StatusCode::OK => {
+                let json = serde_json::to_string(&user).unwrap();
+
+                response = Response::new(
+                    self.create_message(format!("{{\"users\":\"{}\"}}", json))
+                );
+            },
             StatusCode::UNAUTHORIZED => {
                 response = Response::new(
                     self.create_message("{\"message\":\"Insufficient access or token is invalid or missing\"}")
+                );
+            },
+            StatusCode::FORBIDDEN => {
+                response = Response::new(
+                    self.create_message("{\"message\":\"Tampering with the JWT is forbidden\"}")
+                );
+            },
+            StatusCode::NOT_FOUND => {
+                response = Response::new(
+                    self.create_message("{\"message\":\"Could not find user with UID\"}")
+                );
+            },
+            _ => {
+                response = Response::new(
+                    self.create_message("{\"message\":\"An error occurred\"}")
+                );
+            }
+        }
+
+        Ok(response)
+    }
+    
+    pub async fn update_user(&mut self, req: Request<hyper::body::Incoming>) -> ServerResult {
+        let uid = req.uri().path().split('/').collect::<Vec<&str>>()[2].parse::<i32>().unwrap();
+
+        let mut response = Response::new(self.create_message(""));
+        let status = response.status_mut();
+        *status = StatusCode::OK;
+
+        let token = self.get_token_from_request(&req);
+        
+        match token {
+            Some(token) => {
+                let claims = match jwt::decode_jwt(token.as_ref()) {
+                    Ok(claims) => Some(claims),
+                    Err(_) => {
+                        *status = StatusCode::FORBIDDEN;
+                        None
+                    },
+                };
+                
+                match claims {
+                    Some(claims) => {
+                        let is_expired = self.redis.is_token_expired(claims.uid).await; 
+                        println!("Current token, (expired: {}): {:?}", is_expired, claims);
+                        if is_expired || (claims.uid != uid && !claims.admin) {
+                            *status = StatusCode::UNAUTHORIZED
+                        }
+                    },
+                    None => *status = StatusCode::INTERNAL_SERVER_ERROR,
+                }
+            }
+            None => *status = StatusCode::UNAUTHORIZED,
+        }
+
+        let body = req.collect().await?.to_bytes();
+        let body_json: Option<serde_json::Value> = match serde_json::from_slice(body.as_ref()) {
+            Ok(json) => json,
+            Err(_) => None,
+        };
+    
+        let mut postgres_user = User::new();
+        match body_json {
+            Some(user) => 'validate_body: {
+                if *status == StatusCode::UNAUTHORIZED {
+                    break 'validate_body;
+                }
+
+                let required_fields = ["username", "firstName", "lastName"];
+                for field in required_fields {
+                    if user[field].is_null() {
+                        *status = StatusCode::BAD_REQUEST;
+                        break 'validate_body;
+                    }
+                }
+
+                postgres_user.username = String::from(user["username"].as_str().unwrap());
+                postgres_user.first_name = String::from(user["firstName"].as_str().unwrap());
+                postgres_user.last_name = String::from(user["lastName"].as_str().unwrap());
+
+                let update_result = self.postgres.update_user(uid, &postgres_user).await;
+                match update_result {
+                    Ok(rows_changed) => println!("Rows updated ({})", rows_changed),
+                    Err(err) => {
+                        eprintln!("User was not updated in the database ({})", err.as_db_error().unwrap().message());
+                        *status = StatusCode::INTERNAL_SERVER_ERROR;
+                    },
+                }
+            },
+            None => *status = StatusCode::BAD_REQUEST,
+        }
+
+        match *status {
+            StatusCode::OK => {
+                response = Response::new(
+                    self.create_message(format!("{{\"message\":\"Updated user with ID {}\"}}", uid))
+                );
+            },
+            StatusCode::UNAUTHORIZED => {
+                response = Response::new(
+                    self.create_message("{\"message\":\"Insufficient access or token is invalid or missing\"}")
+                );
+            },
+            StatusCode::FORBIDDEN => {
+                response = Response::new(
+                    self.create_message("{\"message\":\"Tampering with the JWT is forbidden\"}")
+                );
+            },
+            StatusCode::NOT_FOUND => {
+                response = Response::new(
+                    self.create_message("{\"message\":\"Could not find user with UID\"}")
+                );
+            },
+            _ => {
+                response = Response::new(
+                    self.create_message("{\"message\":\"An error occurred\"}")
+                );
+            }
+        }
+
+        Ok(response)
+    }
+    
+    pub async fn delete_user(&mut self, req: Request<hyper::body::Incoming>) -> ServerResult {
+        let uid = req.uri().path().split('/').collect::<Vec<&str>>()[2].parse::<i32>().unwrap();
+
+        let mut response = Response::new(self.create_message(""));
+        let status = response.status_mut();
+        *status = StatusCode::OK;
+
+        let token = self.get_token_from_request(&req);
+        
+        match token {
+            Some(token) => {
+                let claims = match jwt::decode_jwt(token.as_ref()) {
+                    Ok(claims) => Some(claims),
+                    Err(_) => {
+                        *status = StatusCode::FORBIDDEN;
+                        None
+                    },
+                };
+                
+                match claims {
+                    Some(claims) => {
+                        let is_expired = self.redis.is_token_expired(claims.uid).await; 
+                        println!("Current token, (expired: {}): {:?}", is_expired, claims);
+                        if is_expired || (claims.uid != uid && !claims.admin) {
+                            *status = StatusCode::UNAUTHORIZED
+                        }
+                    },
+                    None => *status = StatusCode::INTERNAL_SERVER_ERROR,
+                }
+            }
+            None => *status = StatusCode::UNAUTHORIZED,
+        }
+
+        let user = self.postgres.get_user(uid).await;
+        if user.is_some() {
+            let delete_result = self.postgres.delete_user(uid).await;
+            match delete_result {
+                Ok(rows_deleted) => println!("Rows deleted ({})", rows_deleted),
+                Err(err) => {
+                    eprintln!("User was not deleted ({})", err.as_db_error().unwrap().message());
+                    *status = StatusCode::INTERNAL_SERVER_ERROR;
+                },
+            };
+        } else {
+            *status = StatusCode::NOT_FOUND;
+        }
+
+        match *status {
+            StatusCode::OK => {
+                response = Response::new(
+                    self.create_message(format!("{{\"message\":\"Deleted user with ID {}\"}}", uid))
+                );
+            },
+            StatusCode::UNAUTHORIZED => {
+                response = Response::new(
+                    self.create_message("{\"message\":\"Insufficient access or token is invalid or missing\"}")
+                );
+            },
+            StatusCode::FORBIDDEN => {
+                response = Response::new(
+                    self.create_message("{\"message\":\"Tampering with the JWT is forbidden\"}")
+                );
+            },
+            StatusCode::NOT_FOUND => {
+                response = Response::new(
+                    self.create_message("{\"message\":\"Could not find user with UID\"}")
                 );
             },
             _ => {
@@ -317,6 +571,16 @@ impl ServerInstance {
         Full::new(message.into())
             .map_err(|err| match err {})
             .boxed()
+    }
+    
+    fn get_token_from_request(&self, req: &Request<hyper::body::Incoming>) -> Option<String> {
+        match req.headers().get("Authorization") {
+            Some(bearer) => {
+                let (_, token) = bearer.to_str().unwrap().split_once(' ').unwrap();
+                Some(String::from(token))
+            },
+            None => None,
+        }
     }
 }
 

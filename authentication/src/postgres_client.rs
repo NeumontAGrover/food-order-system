@@ -130,4 +130,32 @@ impl PostgresClient {
         };
         users
     }
+
+    pub async fn get_user(&self, uid: i32) -> Option<User> {
+        let sql_statement = "SELECT username, first_name, last_name, admin FROM users WHERE uid = $1::INT";
+        let row = match self.client.query_one(sql_statement, &[&uid]).await {
+            Ok(row) => row,
+            Err(_) => return None,
+        };
+
+        Some(User {
+            username: row.get(0),
+            first_name: row.get(1),
+            last_name: row.get(2),
+            admin: row.get(3)
+        })
+    }
+
+    pub async fn update_user(&self, uid: i32, user: &User) -> Result<u64, Error> {
+        let sql_statement = "UPDATE users
+            SET username = $1::TEXT, first_name = $2::TEXT, last_name = $3::TEXT, admin = $4::BOOLEAN
+            WHERE uid = $5::INT
+        ";
+        self.client.execute(sql_statement, &[&user.username, &user.first_name, &user.last_name, &uid]).await
+    }
+
+    pub async fn delete_user(&self, uid: i32) -> Result<u64, Error> {
+        let sql_statement = "DELETE FROM users WHERE uid = $1::INT";
+        self.client.execute(sql_statement, &[&uid]).await
+    }
 }
