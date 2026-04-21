@@ -45,6 +45,18 @@ services:
         condition: service_healthy
     networks:
       - food-network
+  ordermanager:
+    build:
+      context: ./order_manager
+      dockerfile: dockerfile
+    container_name: order-manager-service
+    ports:
+      - 9133:9133
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - food-network
 
   mongodb:
     image: mongo:latest
