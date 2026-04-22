@@ -1,21 +1,25 @@
-import gleam/string
 import gleam/bytes_tree
 import gleam/erlang/process
-import gleam/http.{Get, Post, Put, Delete}
+import gleam/http.{Delete, Get, Post, Put}
 import gleam/http/request.{type Request}
 import gleam/http/response.{type Response}
 import gleam/json.{type Json}
+import gleam/string
 import logging
 import mist.{type Connection, type ResponseData}
+import order
+import postgres
 
 pub fn main() -> Nil {
   logging.configure()
   logging.set_level(logging.Debug)
 
+  let sql_client = postgres.new()
+
   // This comes from the mist documentation
   // https://hexdocs.pm/mist/index.html
   let assert Ok(_) =
-    fn (req: Request(Connection)) -> Response(ResponseData) {
+    fn(req: Request(Connection)) -> Response(ResponseData) {
       case mist.get_connection_info(req.body) {
         Ok(info) -> {
           logging.log(logging.Info, mist.connection_info_to_string(info))
@@ -27,18 +31,25 @@ pub fn main() -> Nil {
 
       case req.method, request.path_segments(req) {
         Get, [] | Get, ["healthcheck"] -> {
-          let response = create_message("Service is healthy")
-          create_response(200, response)
+          create_message("Service is healthy")
+          |> create_response(200)
         }
-        Get, ["orders"] -> {}
+        Get, ["orders"] -> {
+          let orders =
+            postgres.get_orders(sql_client, 0)
+            |> json.array(order.to_json)
+          json.object([#("orders", orders)])
+          |> create_response(200)
+        }
         method, path -> {
-          let message = "Invalid endpoint ("
+          let message =
+            "Invalid endpoint ("
             <> http.method_to_string(method)
             <> " "
             <> string.join(path, "/")
             <> ")"
-          let response = create_message(message)
-          create_response(404, response)
+          create_message(message)
+          |> create_response(404)
         }
       }
     }
@@ -54,7 +65,7 @@ fn create_message(message: String) -> Json {
   json.object([#("message", json.string(message))])
 }
 
-fn create_response(code: Int, response: Json) -> Response(ResponseData) {
+fn create_response(response: Json, code: Int) -> Response(ResponseData) {
   let json_str = json.to_string(response)
   response.new(code)
   |> response.prepend_header("Content-Type", "application/json")
