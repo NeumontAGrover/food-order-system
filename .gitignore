@@ -9,6 +9,7 @@ entrance-api/out
 # Menu
 menu/.zig-cache
 menu/zig-out
+menu/zig-pkg
 menu/data
 menu/mongo_libs
 menu/src/headers

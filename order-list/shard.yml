@@ -14,5 +14,7 @@ dependencies:
   duckdb:
     github: amauryt/crystal-duckdb
     version: ~> 0.2.5
+  jwt:
+    github: crystal-community/jwt
 
 license: MIT

@@ -21,6 +21,8 @@ gleam_http = ">= 4.3.0 and < 5.0.0"
 gleam_json = ">= 3.1.0 and < 4.0.0"
 pgl = ">= 3.0.0 and < 4.0.0"
 pg_value = ">= 3.0.0 and < 4.0.0"
+gwt = ">= 2.1.2 and < 3.0.0"
+birl = ">= 1.9.0 and < 2.0.0"
 
 [dev_dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"
