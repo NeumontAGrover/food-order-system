@@ -4,6 +4,7 @@ import gleam/dynamic/decode
 import gleam/int
 import gleam/list
 import gleam/result
+import gleam/string
 import logging
 import order.{type Order, Order}
 import order_item.{type Item, Item}
@@ -15,13 +16,20 @@ pub opaque type PostgresClient {
 }
 
 pub fn new() -> PostgresClient {
+  let connection_string =
+    "postgres://foodguy:foodServiceDB@postgresdb:5432/foodguy"
+
+  logging.log(logging.Info, "Connecting to Postgres on " <> connection_string)
+  // let assert Ok(config) = pgl.from_url(connection_string)
+
   let config =
     pgl.config
-    |> pgl.host("postgres")
+    |> pgl.host("postgresdb")
     |> pgl.port(5432)
     |> pgl.database("foodguy")
     |> pgl.username("foodguy")
     |> pgl.password("foodServiceDB")
+    |> pgl.ssl(pgl.SslDisabled)
 
   let db = pgl.new(config)
   let assert Ok(_) = pgl.start(db)
@@ -46,8 +54,8 @@ fn setup_db(connection: Connection) -> Result(Nil, PglError) {
 
 fn create_order_table(connection: Connection) -> Result(Int, PglError) {
   "CREATE TABLE IF NOT EXISTS orders(
-    order_id INT GENERATED PRIMARY KEY NOT NULL,
-    user_id INT FOREIGN KEY REFERECES users(uid) NOT NULL,
+    order_id INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY NOT NULL,
+    user_id INT REFERENCES users(uid) NOT NULL,
     order_date DATE NOT NULL,
     status VARCHAR(10) NOT NULL
   )"
@@ -56,9 +64,9 @@ fn create_order_table(connection: Connection) -> Result(Int, PglError) {
 
 fn create_order_items_table(connection: Connection) -> Result(Int, PglError) {
   "CREATE TABLE IF NOT EXISTS order_items(
-    order_id INT FOREIGN KEY REFERENCES orders(order_id) NOT NULL,
+    order_id INT REFERENCES orders(order_id) NOT NULL,
     item TEXT NOT NULL,
-    price MONEY NOT NULL
+    price REAL NOT NULL
   )"
   |> pgl.execute(connection)
 }
@@ -67,20 +75,27 @@ pub fn create_order(
   client: PostgresClient,
   user_id: Int,
 ) -> Result(Nil, PglError) {
-  let date = birl.to_date_string(birl.now())
+  // It gets sliced because the format is 2026-04-22Z
+  // Should be 2026-04-22
+  let date =
+    birl.now()
+    |> birl.to_date_string()
+    |> string.slice(0, 10)
 
   let sql =
-    "INSERT INTO orders VALUES("
+    "INSERT INTO orders(user_id, order_date, status) VALUES("
     <> int.to_string(user_id)
-    <> ", "
+    <> ", '"
     <> date
-    <> ", CREATED)"
-  result.map(pgl.execute(sql, client.client), fn(_) { Nil })
+    <> "', 'created')"
+  logging.log(logging.Debug, sql)
+
+  sql
+  |> pgl.execute(client.client)
+  |> result.map(fn(_) { Nil })
 }
 
 pub fn get_orders(client: PostgresClient, user_id: Int) -> List(Order) {
-  let orders_map: Dict(Int, Order) = dict.new()
-
   let query =
     "
   SELECT o.order_id, o.order_date, o.status, oi.item, oi.price
@@ -93,35 +108,66 @@ pub fn get_orders(client: PostgresClient, user_id: Int) -> List(Order) {
     |> pgl.values([pg_value.int(user_id)])
     |> pgl.query(client.client)
 
-  let assert Ok(_) =
+  let assert Ok(orders) =
     result.map(query, fn(q) {
-      q.rows
-      |> list.try_each(
-        decode.run(_, {
-          use order_id <- decode.field(0, decode.int)
-          use order_date <- decode.field(1, decode.string)
-          use status <- decode.field(2, decode.string)
-          use item_name <- decode.field(3, decode.string)
-          use item_price <- decode.field(4, decode.float)
-
-          let _ = case dict.get(orders_map, order_id) {
-            Ok(o) -> {
-              let _ = list.append(o.items, [Item(item_name, item_price)])
-              Nil
-            }
-            Error(_) -> {
-              let order = Order(order_id, user_id, order_date, status, [])
-              let _ = dict.insert(orders_map, order_id, order)
-              Nil
-            }
-          }
-
-          decode.success(Nil)
-        }),
+      logging.log(
+        logging.Debug,
+        "Found " <> int.to_string(list.length(q.rows)) <> " rows",
       )
+      q.rows
+      |> list.try_fold(dict.new(), fn(om: Dict(Int, Order), dynamic) {
+        let assert Ok(order) =
+          decode.run(dynamic, {
+            use order_id <- decode.field(0, decode.int)
+            use order_date_dynamic <- decode.field(1, decode.dynamic)
+            let assert Ok(order_date) =
+              decode.run(order_date_dynamic, {
+                use year <- decode.field(0, decode.int)
+                use month <- decode.field(1, decode.int)
+                use day <- decode.field(2, decode.int)
+                decode.success(string.join(
+                  [
+                    int.to_string(year),
+                    int.to_string(month),
+                    int.to_string(day),
+                  ],
+                  "-",
+                ))
+              })
+            use status <- decode.field(2, decode.string)
+            use item_name <- decode.field(3, decode.string)
+            use item_price <- decode.field(4, decode.float)
+            decode.success(
+              Order(order_id, user_id, order_date, status, [
+                Item(item_name, item_price),
+              ]),
+            )
+          })
+
+        let assert Ok(item) = list.first(order.items)
+        let new_dict = case dict.get(om, order.id) {
+          Ok(o) -> {
+            let new_items = list.append(o.items, [item])
+            let new_order =
+              Order(order.id, user_id, order.date, order.status, new_items)
+            dict.insert(om, order.id, new_order)
+          }
+          Error(_) -> {
+            let order =
+              Order(order.id, user_id, order.date, order.status, [
+                item,
+              ])
+            dict.insert(om, order.id, order)
+          }
+        }
+
+        Ok(new_dict)
+      })
     })
 
-  dict.values(orders_map)
+  orders
+  |> result.unwrap(dict.new())
+  |> dict.values()
 }
 
 pub fn get_order(
@@ -172,7 +218,9 @@ pub fn update_order(
       order_id,
     )
 
-  result.map(pgl.execute(order_sql, client.client), fn(_) { Nil })
+  order_sql
+  |> pgl.execute(client.client)
+  |> result.map(fn(_) { Nil })
 }
 
 pub fn delete_order(
@@ -194,5 +242,7 @@ pub fn delete_order(
       order_id,
     )
 
-  result.map(pgl.execute(order_sql, client.client), fn(_) { Nil })
+  order_sql
+  |> pgl.execute(client.client)
+  |> result.map(fn(_) { Nil })
 }

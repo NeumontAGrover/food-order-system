@@ -197,7 +197,7 @@ fn get_jwt_from_header(
   headers: List(#(String, String)),
 ) -> Result(JwtClaims, Response(ResponseData)) {
   let header_result =
-    list.find(headers, fn(header) { header.0 == "Authorization" })
+    list.find(headers, fn(header) { header.0 == "authorization" })
 
   use auth <- try_or_message(
     header_result,
@@ -210,7 +210,11 @@ fn get_jwt_from_header(
     401,
   )
 
-  use claims <- try_or_message(jwt.decode_jwt(split.1), "", 401)
+  use claims <- try_or_message(
+    jwt.decode_jwt(split.1),
+    "Could not decode JWT token. It is forbidden to tamper with tokens",
+    403,
+  )
   Ok(claims)
 }
 
