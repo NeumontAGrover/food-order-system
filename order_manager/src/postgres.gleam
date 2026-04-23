@@ -3,11 +3,12 @@ import gleam/dict.{type Dict}
 import gleam/dynamic/decode
 import gleam/int
 import gleam/list
+import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import logging
 import order.{type Order, Order}
-import order_item.{type Item, Item}
+import order_item.{Item}
 import pg_value
 import pgl.{type Connection, type PglError}
 
@@ -174,34 +175,86 @@ pub fn get_order(
   client: PostgresClient,
   user_id: Int,
   order_id: Int,
-) -> Result(Order, Nil) {
+) -> Result(Option(Order), Nil) {
   let query =
     "
-  SELECT order_id, order_date, status
-  FROM orders
-  WHERE o.user_id = $1, o.order_id = $2
+  SELECT o.order_id, o.order_date, o.status, oi.item, oi.price
+  FROM orders o
+  LEFT JOIN order_items oi
+  ON o.order_id = oi.order_id
+  WHERE o.user_id = $1
+  AND o.order_id = $2
   "
     |> pgl.sql()
     |> pgl.values([pg_value.int(user_id), pg_value.int(order_id)])
     |> pgl.query(client.client)
 
-  let assert Ok(order_result) =
+  let assert Ok(orders) =
     result.map(query, fn(q) {
-      q.rows
-      |> list.try_map(
-        decode.run(_, {
-          use order_id <- decode.field(0, decode.int)
-          use order_date <- decode.field(1, decode.string)
-          use status <- decode.field(2, decode.string)
-
-          decode.success(Order(order_id, user_id, order_date, status, []))
-        }),
+      logging.log(
+        logging.Debug,
+        "Found " <> int.to_string(list.length(q.rows)) <> " rows",
       )
+      q.rows
+      |> list.try_fold(dict.new(), fn(om: Dict(Int, Order), dynamic) {
+        let assert Ok(order) =
+          decode.run(dynamic, {
+            use order_id <- decode.field(0, decode.int)
+            use order_date_dynamic <- decode.field(1, decode.dynamic)
+            let assert Ok(order_date) =
+              decode.run(order_date_dynamic, {
+                use year <- decode.field(0, decode.int)
+                use month <- decode.field(1, decode.int)
+                use day <- decode.field(2, decode.int)
+                decode.success(string.join(
+                  [
+                    int.to_string(year),
+                    int.to_string(month),
+                    int.to_string(day),
+                  ],
+                  "-",
+                ))
+              })
+            use status <- decode.field(2, decode.string)
+            use item_name <- decode.field(3, decode.string)
+            use item_price <- decode.field(4, decode.float)
+            decode.success(
+              Order(order_id, user_id, order_date, status, [
+                Item(item_name, item_price),
+              ]),
+            )
+          })
+
+        let assert Ok(item) = list.first(order.items)
+        let new_dict = case dict.get(om, order.id) {
+          Ok(o) -> {
+            let new_items = list.append(o.items, [item])
+            let new_order =
+              Order(order.id, user_id, order.date, order.status, new_items)
+            dict.insert(om, order.id, new_order)
+          }
+          Error(_) -> {
+            let order =
+              Order(order.id, user_id, order.date, order.status, [
+                item,
+              ])
+            dict.insert(om, order.id, order)
+          }
+        }
+
+        Ok(new_dict)
+      })
     })
 
-  case order_result {
-    Ok(list) -> result.try(list.first(list), fn(first) { Ok(first) })
-    Error(_) -> Error(Nil)
+  let final_order =
+    orders
+    |> result.unwrap(dict.new())
+    |> dict.values()
+    |> list.first()
+
+  case final_order {
+    Ok(o) -> Ok(Some(o))
+    Error(_) -> Ok(None)
   }
 }
 
@@ -213,8 +266,8 @@ pub fn update_order(
 ) -> Result(Nil, PglError) {
   let order_sql = "
   UPDATE orders
-  SET status = " <> status <> "
-  WHERE user_id = " <> int.to_string(user_id) <> ", order_id = " <> int.to_string(
+  SET status = '" <> status <> "'
+  WHERE user_id = " <> int.to_string(user_id) <> " AND order_id = " <> int.to_string(
       order_id,
     )
 
@@ -238,7 +291,7 @@ pub fn delete_order(
   let order_sql = "
   DELETE *
   FROM orders
-  WHERE user_id = " <> int.to_string(user_id) <> ", order_id = " <> int.to_string(
+  WHERE user_id = " <> int.to_string(user_id) <> " AND order_id = " <> int.to_string(
       order_id,
     )
 

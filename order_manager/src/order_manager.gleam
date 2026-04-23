@@ -1,4 +1,5 @@
 import gleam/bytes_tree
+import gleam/dynamic/decode.{type Decoder}
 import gleam/erlang/process
 import gleam/http.{Delete, Get, Post, Put}
 import gleam/http/request.{type Request}
@@ -6,6 +7,7 @@ import gleam/http/response.{type Response}
 import gleam/int
 import gleam/json.{type Json}
 import gleam/list
+import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import jwt.{type JwtClaims}
@@ -59,8 +61,16 @@ pub fn main() -> Nil {
         Get, ["order", order_id] -> {
           case get_order(req, sql_client, order_id) {
             Ok(order) -> {
-              json.object([#("order", order.to_json(order))])
-              |> create_response(200)
+              case order {
+                Some(o) -> {
+                  json.object([#("order", order.to_json(o))])
+                  |> create_response(200)
+                }
+                None -> {
+                  json.object([#("order", json.null())])
+                  |> create_response(200)
+                }
+              }
             }
             Error(message) -> message
           }
@@ -68,7 +78,7 @@ pub fn main() -> Nil {
         Put, ["order", order_id] -> {
           case update_order(req, sql_client, order_id) {
             Ok(_) -> {
-              create_message("Updated order with order_id" <> order_id)
+              create_message("Updated order with order_id " <> order_id)
               |> create_response(200)
             }
             Error(message) -> message
@@ -128,7 +138,7 @@ fn get_order(
   req: Request(Connection),
   postgres_client: PostgresClient,
   order_id_str: String,
-) -> Result(Order, Response(ResponseData)) {
+) -> Result(Option(Order), Response(ResponseData)) {
   use token <- result.try(get_jwt_from_header(req.headers))
   use order_id <- result.try(parse_path(order_id_str))
   try_or_message(
@@ -144,10 +154,22 @@ fn update_order(
   postgres_client: PostgresClient,
   order_id_str: String,
 ) -> Result(Nil, Response(ResponseData)) {
+  let decoder = {
+    use status <- decode.field("status", decode.string)
+    decode.success(#(status, status))
+  }
+
+  use body_result <- result.try(parse_body(req, decoder))
+
   use token <- result.try(get_jwt_from_header(req.headers))
   use order_id <- result.try(parse_path(order_id_str))
   try_or_message(
-    postgres.update_order(postgres_client, token.uid, order_id, "TEST"),
+    postgres.update_order(
+      postgres_client,
+      token.uid,
+      order_id,
+      string.lowercase(body_result.1),
+    ),
     "An error occurred",
     500,
     fn(_) { Ok(Nil) },
@@ -225,4 +247,24 @@ fn parse_path(segment: String) -> Result(Int, Response(ResponseData)) {
     400,
   )
   Ok(number)
+}
+
+fn parse_body(
+  req: Request(Connection),
+  decoder: Decoder(#(String, String)),
+) -> Result(#(String, String), Response(ResponseData)) {
+  let results =
+    mist.read_body(req, 1024 * 1024 * 10)
+    |> result.map(fn(req) {
+      result.map_error(json.parse_bits(req.body, decoder), fn(_) {
+        create_message("Could not parse request body") |> create_response(400)
+      })
+    })
+    |> result.map_error(fn(_) {
+      create_message("Could not read request body") |> create_response(500)
+    })
+
+  use body_read <- result.try(results)
+  use body_parse <- result.try(body_read)
+  Ok(body_parse)
 }
