@@ -17,11 +17,10 @@ pub opaque type PostgresClient {
 }
 
 pub fn new() -> PostgresClient {
-  let connection_string =
-    "postgres://foodguy:foodServiceDB@postgresdb:5432/foodguy"
-
-  logging.log(logging.Info, "Connecting to Postgres on " <> connection_string)
-  // let assert Ok(config) = pgl.from_url(connection_string)
+  logging.log(
+    logging.Info,
+    "Connecting to Postgres on postgres://foodguy:foodServiceDB@postgresdb:5432/foodguy",
+  )
 
   let config =
     pgl.config

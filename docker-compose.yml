@@ -103,13 +103,30 @@ services:
     networks:
       - food-network
 
-  lavinmq:
-    image: cloudamqp/lavinmq:pr-1844
-    container_name: lavinmq
+  # lavin:
+  #   image: cloudamqp/lavinmq:main
+  #   container_name: lavinmq
+  #   ports:
+  #     - 15672:15672
+  #   volumes:
+  #     - ./mq:/tmp/amqp
+  #   networks:
+  #     - food-network
+  # rabbit:
+  #   image: rabbitmq
+  #   container_name: rabbitmq
+  #   ports:
+  #     - 5672:5672
+  #   volumes:
+  #     - ./mq:/var/lib/rabbitmq
+  #   networks:
+  #     - food-network
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
     ports:
-      - 15672:5672
-    volumes:
-      - ./lavin:/tmp/amqp
+      - 5672:5672
+      - 15672:15672
     networks:
       - food-network
 networks:

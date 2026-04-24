@@ -15,12 +15,14 @@ import logging
 import mist.{type Connection, type ResponseData}
 import order.{type Order}
 import postgres.{type PostgresClient}
+import rabbit
 
 pub fn main() -> Nil {
   logging.configure()
   logging.set_level(logging.Debug)
 
   let sql_client = postgres.new()
+  let rabbit_client = rabbit.new()
 
   // This comes from the mist documentation
   // https://hexdocs.pm/mist/index.html
@@ -141,12 +143,21 @@ fn get_order(
 ) -> Result(Option(Order), Response(ResponseData)) {
   use token <- result.try(get_jwt_from_header(req.headers))
   use order_id <- result.try(parse_path(order_id_str))
-  try_or_message(
-    postgres.get_order(postgres_client, token.uid, order_id),
-    "An error occurred",
-    500,
-    fn(order) { Ok(order) },
-  )
+  case token.uid == order_id || token.admin {
+    True -> {
+      try_or_message(
+        postgres.get_order(postgres_client, token.uid, order_id),
+        "An error occurred",
+        500,
+        fn(order) { Ok(order) },
+      )
+    }
+    False -> {
+      create_message("Not allowed to view that order")
+      |> create_response(401)
+      |> Error()
+    }
+  }
 }
 
 fn update_order(
@@ -163,17 +174,26 @@ fn update_order(
 
   use token <- result.try(get_jwt_from_header(req.headers))
   use order_id <- result.try(parse_path(order_id_str))
-  try_or_message(
-    postgres.update_order(
-      postgres_client,
-      token.uid,
-      order_id,
-      string.lowercase(body_result.1),
-    ),
-    "An error occurred",
-    500,
-    fn(_) { Ok(Nil) },
-  )
+  case token.uid == order_id || token.admin {
+    True -> {
+      try_or_message(
+        postgres.update_order(
+          postgres_client,
+          token.uid,
+          order_id,
+          string.lowercase(body_result.1),
+        ),
+        "An error occurred",
+        500,
+        fn(_) { Ok(Nil) },
+      )
+    }
+    False -> {
+      create_message("Not allowed to update that order")
+      |> create_response(401)
+      |> Error()
+    }
+  }
 }
 
 fn delete_order(
@@ -183,12 +203,21 @@ fn delete_order(
 ) -> Result(Nil, Response(ResponseData)) {
   use token <- result.try(get_jwt_from_header(req.headers))
   use order_id <- result.try(parse_path(order_id_str))
-  try_or_message(
-    postgres.delete_order(postgres_client, token.uid, order_id),
-    "An error occurred",
-    500,
-    fn(_) { Ok(Nil) },
-  )
+  case token.uid == order_id || token.admin {
+    True -> {
+      try_or_message(
+        postgres.delete_order(postgres_client, token.uid, order_id),
+        "An error occurred",
+        500,
+        fn(_) { Ok(Nil) },
+      )
+    }
+    False -> {
+      create_message("Not allowed to delete that order")
+      |> create_response(401)
+      |> Error()
+    }
+  }
 }
 
 fn create_message(message: String) -> Json {
