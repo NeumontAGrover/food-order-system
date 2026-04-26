@@ -33,9 +33,8 @@ module DuckClient
       items = [] of FoodItem
 
       DB.connect CONNECTION_STRING do |connection|
-        connection.query "SELECT uid, food_name, price, quantity FROM order_list ORDER BY food_name" do |result|
+        connection.query "SELECT food_name, price, quantity FROM order_list WHERE uid = ? ORDER BY food_name", uid do |result|
           result.each do
-            uid = result.read(Int32)
             name = result.read(String)
             price = result.read(Float32)
             quantity = result.read(Int32)

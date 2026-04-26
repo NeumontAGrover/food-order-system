@@ -22,7 +22,7 @@ module ServerHandler
     con.response.print "{\"message\":\"Order List is healthy\"}"
   end
 
-  def item(con : Context, db : DuckDb)
+  def item(uid : Int, con : Context, db : DuckDb)
     case con.request.method
     when "POST"
       body = con.request.body
@@ -41,7 +41,7 @@ module ServerHandler
 
       begin
         token = get_token_from_headers con.request.headers
-        if token.nil?
+        if token == Nil
           con.response.status_code = 401
           con.response.print "{\"message\":\"Missing or invalid JWT Token\"}"
           return
@@ -79,14 +79,20 @@ module ServerHandler
         end
 
         token = get_token_from_headers con.request.headers
-        if token.nil?
+        if token == Nil
           con.response.status_code = 401
           con.response.print "{\"message\":\"Missing or invalid JWT Token\"}"
           return
         end
         claims = decode_token token.as(String)
 
-        db.update_quantity claims["uid"].as_i, food_name, quantity
+        if uid != claims["uid"] && !claims["admin"]
+          con.response.status_code = 401
+          con.response.print "{\"message\":\"Not allowed to update this item\"}"
+          return
+        end
+
+        db.update_quantity uid, food_name, quantity
         con.response.status_code = 200
         con.response.print "{\"message\":\"#{food_name} quantity updated to #{quantity}\"}"
       rescue exception
@@ -110,7 +116,21 @@ module ServerHandler
           raise "foodName is nil"
         end
 
-        db.remove_item TEMP_UID, food_name
+        token = get_token_from_headers con.request.headers
+        if token == Nil
+          con.response.status_code = 401
+          con.response.print "{\"message\":\"Missing or invalid JWT Token\"}"
+          return
+        end
+        claims = decode_token token.as(String)
+
+        if uid != claims["uid"] && !claims["admin"]
+          con.response.status_code = 401
+          con.response.print "{\"message\":\"Not allowed to update this item\"}"
+          return
+        end
+
+        db.remove_item uid, food_name
         con.response.status_code = 200
         con.response.print "{\"message\":\"#{food_name} removed\"}"
       rescue exception
@@ -127,7 +147,15 @@ module ServerHandler
     case con.request.method
     when "GET"
       begin
-        order_list = db.get_order_list(TEMP_UID).to_json
+        token = get_token_from_headers con.request.headers
+        if token == Nil
+          con.response.status_code = 401
+          con.response.print "{\"message\":\"Missing or invalid JWT Token\"}"
+          return
+        end
+        claims = decode_token token.as(String)
+
+        order_list = db.get_order_list(claims["uid"].as_i).to_json
 
         con.response.status_code = 200
         con.response.print order_list
@@ -137,7 +165,15 @@ module ServerHandler
       end
     when "DELETE"
       begin
-        order_list = db.clear_list TEMP_UID
+        token = get_token_from_headers con.request.headers
+        if token == Nil
+          con.response.status_code = 401
+          con.response.print "{\"message\":\"Missing or invalid JWT Token\"}"
+          return
+        end
+        claims = decode_token token.as(String)
+
+        order_list = db.clear_list claims["uid"].as_i
 
         con.response.status_code = 200
         con.response.print "{\"message\":\"Cleared order list\"}"
@@ -155,10 +191,18 @@ module ServerHandler
     case con.request.method
     when "POST"
       begin
-        order_list = db.get_order_list(TEMP_UID)
+        token = get_token_from_headers con.request.headers
+        if token == Nil
+          con.response.status_code = 401
+          con.response.print "{\"message\":\"Missing or invalid JWT Token\"}"
+          return
+        end
+        claims = decode_token token.as(String)
+
+        order_list = db.get_order_list claims["uid"].as_i
         if order_list.size > 0
-          publish_items TEMP_UID, order_list.to_json
-          db.clear_list(TEMP_UID)
+          publish_items claims["uid"].as_i, order_list.to_json
+          db.clear_list claims["uid"].as_i
           con.response.status_code = 202
           con.response.print "{\"message\":\"Accepted items for order see http://localhost:8080/order-manager/order\"}"
         else
