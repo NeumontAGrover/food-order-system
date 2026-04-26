@@ -124,9 +124,9 @@ impl ServerInstance {
     
         match *status {
             StatusCode::CREATED => {
-                let current_time_ms = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();
+                let current_time_sec = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
                 let uid = self.postgres.get_user_id(&postgres_user.username).await.unwrap();
-                let token = jwt::create_jwt(uid, false, current_time_ms).unwrap();
+                let token = jwt::create_jwt(uid, false, current_time_sec).unwrap();
                 let token_ref = token.as_ref();
 
                 match self.redis.add_token(uid, token_ref).await {
@@ -202,8 +202,8 @@ impl ServerInstance {
             uid = self.postgres.get_user_id(username.as_ref().unwrap().as_ref()).await;
             if uid.is_some() {
                 let is_admin = self.postgres.get_is_admin(uid.unwrap()).await;
-                let current_time_ms = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_millis();
-                token = Some(jwt::create_jwt(uid.unwrap(), is_admin, current_time_ms).unwrap());
+                let current_time_sec = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap().as_secs();
+                token = Some(jwt::create_jwt(uid.unwrap(), is_admin, current_time_sec).unwrap());
                 hashed_password = self.postgres.get_user_password_hash(uid.unwrap()).await;
             } else {
                 *status = StatusCode::NOT_FOUND;

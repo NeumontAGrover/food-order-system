@@ -16,5 +16,7 @@ dependencies:
     version: ~> 0.2.5
   jwt:
     github: crystal-community/jwt
+  amqp-client:
+    github: cloudamqp/amqp-client.cr
 
 license: MIT

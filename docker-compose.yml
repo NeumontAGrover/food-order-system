@@ -31,6 +31,8 @@ services:
     container_name: order-list-service
     ports:
       - 45854:45854
+    volumes:
+      - ./order-list/data:/usr/local/app/data
     networks:
       - food-network
   authentication:
@@ -103,24 +105,6 @@ services:
     networks:
       - food-network
 
-  # lavin:
-  #   image: cloudamqp/lavinmq:main
-  #   container_name: lavinmq
-  #   ports:
-  #     - 15672:15672
-  #   volumes:
-  #     - ./mq:/tmp/amqp
-  #   networks:
-  #     - food-network
-  # rabbit:
-  #   image: rabbitmq
-  #   container_name: rabbitmq
-  #   ports:
-  #     - 5672:5672
-  #   volumes:
-  #     - ./mq:/var/lib/rabbitmq
-  #   networks:
-  #     - food-network
   rabbitmq:
     image: rabbitmq:3-management
     container_name: rabbitmq

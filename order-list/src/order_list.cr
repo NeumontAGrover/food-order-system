@@ -14,11 +14,16 @@ server = HTTP::Server.new do |con|
   case con.request.path
   when "/healthcheck"
     healthcheck con
-  when "/order"
-    item con, duckdb
   when "/order-list"
     list con, duckdb
+  when "/submit-items"
+    submit con, duckdb
   else
+    if con.request.path.includes? "/order"
+      split_path = con.request.path.split '/'
+      order_uid = split_path[2].to_i
+    end
+    item con, duckdb
     con.response.status_code = 400
     con.response.print "{\"message\":\"No available endpoint\"}"
   end

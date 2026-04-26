@@ -1,0 +1,7 @@
+{
+  "crystal-lang.definitions": true,
+  "crystal-lang.dependencies": true,
+  "crystal-lang.hover": true,
+  "crystal-lang.problems": true,
+  "crystal-lang.spec-explorer": true
+}

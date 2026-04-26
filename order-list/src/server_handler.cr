@@ -1,9 +1,15 @@
 require "http/server"
 require "json"
 require "./duck_db"
+require "./rabbit"
+require "./jwt_module"
+
+include RabbitClient
+include Jwt
 
 module ServerHandler
   alias Context = HTTP::Server::Context
+  TEMP_UID = 0
 
   def healthcheck(con : Context)
     if (con.request.method != "GET")
@@ -25,16 +31,24 @@ module ServerHandler
         con.response.print "{\"message\":\"A body must be provided\"}"
         return
       end
-      
+
       item = FoodItem.from_json(body.not_nil!)
       if !item.has_key?("foodName") || !item.has_key?("price") || !item.has_key?("quantity")
         con.response.status_code = 400
         con.response.print "{\"message\":\"The body must contain 'foodName', 'price', and 'quantity'\"}"
         return
       end
-      
+
       begin
-        db.add_item 0_u64, item
+        token = get_token_from_headers con.request.headers
+        if token.nil?
+          con.response.status_code = 401
+          con.response.print "{\"message\":\"Missing or invalid JWT Token\"}"
+          return
+        end
+        claims = decode_token token.as(String)
+
+        db.add_item claims["uid"].as_i, item
         con.response.status_code = 201
         con.response.print "{\"message\":\"Item added\"}"
       rescue exception
@@ -55,12 +69,24 @@ module ServerHandler
 
       begin
         food_name = quantity_json["foodName"].as_s?
-        if food_name.nil?; raise "foodName is nil"; end
-          
-        quantity = quantity_json["quantity"].as_i?
-        if quantity.nil?; raise "foodName is nil"; end
+        if food_name.nil?
+          raise "foodName is nil"
+        end
 
-        db.update_quantity 0_u64, food_name, quantity.to_u32
+        quantity = quantity_json["quantity"].as_i?
+        if quantity.nil?
+          raise "foodName is nil"
+        end
+
+        token = get_token_from_headers con.request.headers
+        if token.nil?
+          con.response.status_code = 401
+          con.response.print "{\"message\":\"Missing or invalid JWT Token\"}"
+          return
+        end
+        claims = decode_token token.as(String)
+
+        db.update_quantity claims["uid"].as_i, food_name, quantity
         con.response.status_code = 200
         con.response.print "{\"message\":\"#{food_name} quantity updated to #{quantity}\"}"
       rescue exception
@@ -80,9 +106,11 @@ module ServerHandler
 
       begin
         food_name = quantity_json["foodName"].as_s?
-        if food_name.nil?; raise "foodName is nil"; end
+        if food_name.nil?
+          raise "foodName is nil"
+        end
 
-        db.remove_item 0_u64, food_name
+        db.remove_item TEMP_UID, food_name
         con.response.status_code = 200
         con.response.print "{\"message\":\"#{food_name} removed\"}"
       rescue exception
@@ -99,20 +127,44 @@ module ServerHandler
     case con.request.method
     when "GET"
       begin
-        order_list = db.get_order_list(0).to_json
+        order_list = db.get_order_list(TEMP_UID).to_json
 
         con.response.status_code = 200
         con.response.print order_list
-      rescue
+      rescue exception
         con.response.status_code = 500
-        con.response.print "{\"message\":\"An error occured\"}"
+        con.response.print "{\"message\":\"An error occured #{exception.message}\"}"
       end
     when "DELETE"
       begin
-        order_list = db.clear_list 0
+        order_list = db.clear_list TEMP_UID
 
         con.response.status_code = 200
         con.response.print "{\"message\":\"Cleared order list\"}"
+      rescue exception
+        con.response.status_code = 500
+        con.response.print "{\"message\":\"An error occured #{exception.message}\"}"
+      end
+    else
+      con.response.status_code = 405
+      con.response.print "{\"message\":\"Method is not allowed\"}"
+    end
+  end
+
+  def submit(con : Context, db : DuckDb)
+    case con.request.method
+    when "POST"
+      begin
+        order_list = db.get_order_list(TEMP_UID)
+        if order_list.size > 0
+          publish_items TEMP_UID, order_list.to_json
+          db.clear_list(TEMP_UID)
+          con.response.status_code = 202
+          con.response.print "{\"message\":\"Accepted items for order see http://localhost:8080/order-manager/order\"}"
+        else
+          con.response.status_code = 403
+          con.response.print "{\"message\":\"There must be at least one item in the order list\"}"
+        end
       rescue
         con.response.status_code = 500
         con.response.print "{\"message\":\"An error occured\"}"
@@ -122,4 +174,17 @@ module ServerHandler
       con.response.print "{\"message\":\"Method is not allowed\"}"
     end
   end
+end
+
+def get_token_from_headers(headers : HTTP::Headers)
+  if !headers.has_key? "Authorization"
+    return Nil
+  end
+
+  split = headers["Authorization"].split(' ')
+  if split.size < 2
+    return Nil
+  end
+
+  return split[1]
 end
