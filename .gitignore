@@ -32,3 +32,6 @@ order_manager/*.beam
 order_manager/*.ez
 order_manager/build
 order_manager/erl_crash.dump
+
+# Tests
+tests/node_modules
