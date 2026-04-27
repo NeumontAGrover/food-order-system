@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Food Order Service Nginx</title>
+
+    <style>
+      a {
+        color: inherit;
+      }
+    </style>
+
+    <script>
+      setInterval(() => {
+        fetch("http://localhost:8080/menu/healthcheck")
+          .then(() => valid(document.getElementById("menu-service")))
+          .catch(() => invalid(document.getElementById("menu-service")));
+
+        fetch("http://localhost:8080/basket/healthcheck")
+          .then(() => valid(document.getElementById("basket-service")))
+          .catch(() => invalid(document.getElementById("basket-service")));
+
+        fetch("http://localhost:8080/auth/healthcheck")
+          .then(() => valid(document.getElementById("auth-service")))
+          .catch(() => invalid(document.getElementById("auth-service")));
+
+        fetch("http://localhost:8080/man/healthcheck")
+          .then(() => valid(document.getElementById("man-service")))
+          .catch(() => invalid(document.getElementById("man-service")));
+      }, 5000);
+
+      function valid(element) {
+        element.style.listStyle = "disc";
+        element.style.color = "green";
+      }
+
+      function invalid(element) {
+        element.style.listStyle = "circle";
+        element.style.color = "red";
+      }
+    </script>
+  </head>
+  <body>
+    <p>Services</p>
+
+    <ul>
+      <li id="menu-service">
+        <a href="http://localhost:8080/menu/healthcheck">menu service</a>
+      </li>
+      <li id="basket-service">
+        <a href="http://localhost:8080/basket/healthcheck">basket service</a>
+      </li>
+      <li id="auth-service">
+        <a href="http://localhost:8080/auth/healthcheck">auth service</a>
+      </li>
+      <li id="man-service">
+        <a href="http://localhost:8080/man/healthcheck">
+          order manager service
+        </a>
+      </li>
+    </ul>
+  </body>
+</html>
