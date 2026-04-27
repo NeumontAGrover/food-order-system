@@ -22,7 +22,7 @@ pub fn main() -> Nil {
   logging.set_level(logging.Debug)
 
   let sql_client = postgres.new()
-  let rabbit_client = rabbit.new()
+  let assert Ok(_) = rabbit.start()
 
   // This comes from the mist documentation
   // https://hexdocs.pm/mist/index.html
@@ -167,7 +167,7 @@ fn update_order(
 ) -> Result(Nil, Response(ResponseData)) {
   let decoder = {
     use status <- decode.field("status", decode.string)
-    decode.success(#(status, status))
+    decode.success(#("status", status))
   }
 
   use body_result <- result.try(parse_body(req, decoder))

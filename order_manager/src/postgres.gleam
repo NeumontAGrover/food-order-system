@@ -1,6 +1,7 @@
 import birl
 import gleam/dict.{type Dict}
 import gleam/dynamic/decode
+import gleam/float
 import gleam/int
 import gleam/list
 import gleam/option.{type Option, None, Some}
@@ -8,7 +9,7 @@ import gleam/result
 import gleam/string
 import logging
 import order.{type Order, Order}
-import order_item.{Item}
+import order_item.{type Item, Item}
 import pg_value
 import pgl.{type Connection, type PglError}
 
@@ -66,7 +67,8 @@ fn create_order_items_table(connection: Connection) -> Result(Int, PglError) {
   "CREATE TABLE IF NOT EXISTS order_items(
     order_id INT REFERENCES orders(order_id) NOT NULL,
     item TEXT NOT NULL,
-    price REAL NOT NULL
+    price REAL NOT NULL,
+    quantity INT NOT NULL
   )"
   |> pgl.execute(connection)
 }
@@ -74,7 +76,7 @@ fn create_order_items_table(connection: Connection) -> Result(Int, PglError) {
 pub fn create_order(
   client: PostgresClient,
   user_id: Int,
-) -> Result(Nil, PglError) {
+) -> Result(Int, PglError) {
   // It gets sliced because the format is 2026-04-22Z
   // Should be 2026-04-22
   let date =
@@ -87,18 +89,53 @@ pub fn create_order(
     <> int.to_string(user_id)
     <> ", '"
     <> date
-    <> "', 'created')"
+    <> "', 'created')
+    RETURNING order_id
+    "
+
   logging.log(logging.Debug, sql)
 
-  sql
-  |> pgl.execute(client.client)
-  |> result.map(fn(_) { Nil })
+  use query <- result.try(pgl.query(pgl.sql(sql), client.client))
+
+  let assert Ok(first) = list.first(query.rows)
+  let assert Ok(order_id) = decode.run(first, decode.at([0], decode.int))
+
+  Ok(order_id)
+}
+
+pub fn add_items(
+  client: PostgresClient,
+  order_id: Int,
+  items: List(Item),
+) -> Result(Nil, PglError) {
+  add_item(client, items, order_id)
+}
+
+fn add_item(
+  client: PostgresClient,
+  remaining_items: List(Item),
+  order_id: Int,
+) -> Result(Nil, PglError) {
+  case remaining_items {
+    [item, ..remaining] -> {
+      let sql = "
+      INSERT INTO order_items(order_id, item, price, quantity) VALUES(" <> int.to_string(
+          order_id,
+        ) <> ", '" <> item.name <> "', " <> float.to_string(item.price) <> ", " <> int.to_string(
+          item.quantity,
+        ) <> ")
+      "
+      use _ <- result.try(pgl.execute(sql, client.client))
+      add_item(client, remaining, order_id)
+    }
+    [] -> Ok(Nil)
+  }
 }
 
 pub fn get_orders(client: PostgresClient, user_id: Int) -> List(Order) {
   let query =
     "
-  SELECT o.order_id, o.order_date, o.status, oi.item, oi.price
+  SELECT o.order_id, o.order_date, o.status, oi.item, oi.price, oi.quantity
   FROM orders o
   LEFT JOIN order_items oi
   ON o.order_id = oi.order_id
@@ -137,9 +174,10 @@ pub fn get_orders(client: PostgresClient, user_id: Int) -> List(Order) {
             use status <- decode.field(2, decode.string)
             use item_name <- decode.field(3, decode.string)
             use item_price <- decode.field(4, decode.float)
+            use item_quantity <- decode.field(5, decode.int)
             decode.success(
               Order(order_id, user_id, order_date, status, [
-                Item(item_name, item_price),
+                Item(user_id, item_name, item_price, item_quantity),
               ]),
             )
           })
@@ -217,9 +255,10 @@ pub fn get_order(
             use status <- decode.field(2, decode.string)
             use item_name <- decode.field(3, decode.string)
             use item_price <- decode.field(4, decode.float)
+            use item_quantity <- decode.field(5, decode.int)
             decode.success(
               Order(order_id, user_id, order_date, status, [
-                Item(item_name, item_price),
+                Item(user_id, item_name, item_price, item_quantity),
               ]),
             )
           })
