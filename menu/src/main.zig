@@ -32,7 +32,7 @@ pub fn main() !void {
     router.post("/menu", MenuController.createMenuItem, .{});
     router.put("/menu/:id", MenuController.updateMenuItem, .{});
     router.delete("/menu/:id", MenuController.deleteMenuItem, .{});
-    router.get("/healthcheck", healthCheck, .{});
+    router.get("/menu/healthcheck", healthCheck, .{});
 
     std.log.info("The service is running on http://menu-service:{}", .{port});
     try server.listen();

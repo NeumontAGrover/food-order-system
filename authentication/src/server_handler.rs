@@ -32,24 +32,24 @@ impl ServerInstance {
 
     pub async fn serve(&mut self, req: Request<hyper::body::Incoming>) -> ServerResult {
         match (req.method(), req.uri().path()) {
-            (&Method::GET, "/") | (&Method::GET, "/healthcheck") => self.healthcheck(),
-            (&Method::POST, "/register") => self.register(req).await,
-            (&Method::POST, "/login") => self.login(req).await,
-            (&Method::GET, "/users") => self.get_users(req).await,
+            (&Method::GET, "/auth") | (&Method::GET, "/auth/healthcheck") => self.healthcheck(),
+            (&Method::POST, "/auth/register") => self.register(req).await,
+            (&Method::POST, "/auth/login") => self.login(req).await,
+            (&Method::GET, "/auth/users") => self.get_users(req).await,
             _ => {
                 if req.method() == &Method::GET {
                     let segments: Vec<&str> = req.uri().path().split('/').collect();
-                    if segments[1].eq("user") {
+                    if segments[1].eq("auth") && segments[2].eq("user") {
                         return self.get_user(req).await;
                     }
                 } else if req.method() == &Method::PATCH {
                     let segments: Vec<&str> = req.uri().path().split('/').collect();
-                    if segments[1].eq("user") {
+                    if segments[1].eq("auth") && segments[2].eq("user") {
                         return self.update_user(req).await;
                     }
                 } else if req.method() == &Method::DELETE {
                     let segments: Vec<&str> = req.uri().path().split('/').collect();
-                    if segments[1].eq("user") {
+                    if segments[1].eq("auth") && segments[2].eq("user") {
                         return self.delete_user(req).await;
                     }
                 }
@@ -315,7 +315,7 @@ impl ServerInstance {
     }
     
     pub async fn get_user(&mut self, req: Request<hyper::body::Incoming>) -> ServerResult {
-        let uid = req.uri().path().split('/').collect::<Vec<&str>>()[2].parse::<i32>().unwrap();
+        let uid = req.uri().path().split('/').collect::<Vec<&str>>()[3].parse::<i32>().unwrap();
 
         let mut response = Response::new(self.create_message(""));
         let status = response.status_mut();
@@ -389,7 +389,7 @@ impl ServerInstance {
     }
     
     pub async fn update_user(&mut self, req: Request<hyper::body::Incoming>) -> ServerResult {
-        let uid = req.uri().path().split('/').collect::<Vec<&str>>()[2].parse::<i32>().unwrap();
+        let uid = req.uri().path().split('/').collect::<Vec<&str>>()[3].parse::<i32>().unwrap();
 
         let mut response = Response::new(self.create_message(""));
         let status = response.status_mut();
@@ -490,7 +490,7 @@ impl ServerInstance {
     }
     
     pub async fn delete_user(&mut self, req: Request<hyper::body::Incoming>) -> ServerResult {
-        let uid = req.uri().path().split('/').collect::<Vec<&str>>()[2].parse::<i32>().unwrap();
+        let uid = req.uri().path().split('/').collect::<Vec<&str>>()[3].parse::<i32>().unwrap();
 
         let mut response = Response::new(self.create_message(""));
         let status = response.status_mut();

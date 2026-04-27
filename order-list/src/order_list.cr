@@ -12,18 +12,16 @@ server = HTTP::Server.new do |con|
   con.response.content_type = "application/json"
 
   case con.request.path
-  when "/healthcheck"
+  when "/basket/healthcheck"
     healthcheck con
-  when "/order"
-    item 0, con, duckdb
-  when "/order-list"
+  when "/basket/order-list"
     list con, duckdb
-  when "/submit-items"
+  when "/basket/submit-items"
     submit con, duckdb
   else
-    if con.request.path.includes? "/order"
+    if con.request.path.includes? "/basket/order"
       split_path = con.request.path.split '/'
-      order_uid = split_path[2].to_i
+      order_uid = split_path[3].to_i
       item order_uid, con, duckdb
     else
       con.response.status_code = 400

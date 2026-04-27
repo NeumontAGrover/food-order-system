@@ -38,11 +38,11 @@ pub fn main() -> Nil {
       }
 
       case req.method, request.path_segments(req) {
-        Get, [] | Get, ["healthcheck"] -> {
+        Get, ["man"] | Get, ["man", "healthcheck"] -> {
           create_message("Service is healthy")
           |> create_response(200)
         }
-        Post, ["order"] -> {
+        Post, ["man", "order"] -> {
           case create_order(req, sql_client) {
             Ok(_) -> {
               create_message("Order added")
@@ -51,7 +51,7 @@ pub fn main() -> Nil {
             Error(err) -> err
           }
         }
-        Get, ["orders"] -> {
+        Get, ["man", "orders"] -> {
           case get_orders(req, sql_client) {
             Ok(orders) -> {
               json.object([#("order", json.array(orders, order.to_json))])
@@ -60,7 +60,7 @@ pub fn main() -> Nil {
             Error(message) -> message
           }
         }
-        Get, ["order", order_id] -> {
+        Get, ["man", "order", order_id] -> {
           case get_order(req, sql_client, order_id) {
             Ok(order) -> {
               case order {
@@ -77,7 +77,7 @@ pub fn main() -> Nil {
             Error(message) -> message
           }
         }
-        Put, ["order", order_id] -> {
+        Put, ["man", "order", order_id] -> {
           case update_order(req, sql_client, order_id) {
             Ok(_) -> {
               create_message("Updated order with order_id " <> order_id)
@@ -86,7 +86,7 @@ pub fn main() -> Nil {
             Error(message) -> message
           }
         }
-        Delete, ["order", order_id] -> {
+        Delete, ["man", "order", order_id] -> {
           case delete_order(req, sql_client, order_id) {
             Ok(_) -> {
               create_message("Deleted order with order_id " <> order_id)
