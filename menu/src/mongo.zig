@@ -160,7 +160,7 @@ pub const MongoClient = struct {
         return food_items;
     }
 
-    pub fn insertDocument(self: Self, collection: *mongoc.mongoc_collection_t, data: []const u8) MongoError!void {
+    pub fn insertDocument(self: Self, collection: *mongoc.mongoc_collection_t, data: []const u8) MongoError![]const u8 {
         const valid_data = std.json.validate(self.allocator, data) catch @panic("Out of memory");
         if (!valid_data) return MongoError.InvalidDataFormat;
 
@@ -171,8 +171,23 @@ pub const MongoClient = struct {
         const doc = mongoc.bson_new_from_json(data_string, @intCast(data.len), null);
         defer mongoc.bson_destroy(doc);
 
-        const success = mongoc.mongoc_collection_insert_one(collection, doc, null, null, null);
-        if (!success) return MongoError.InsertDocumentFailed;
+        var err: mongoc.bson_error_t = undefined;
+        var reply: mongoc.bson_t = undefined;
+        defer mongoc.bson_destroy(&reply);
+        const success = mongoc.mongoc_collection_insert_one(collection, doc, null, &reply, &err);
+        if (!success) {
+            std.log.err("Could not insert document:\n{s}", .{err.message});
+            return MongoError.InsertDocumentFailed;
+        }
+
+        const json_c = mongoc.bson_as_relaxed_extended_json(&reply, null);
+        defer mongoc.bson_free(json_c);
+        std.debug.print("{s}\n", .{json_c});
+        const json_str: []const u8 = std.mem.span(json_c);
+        return std.fmt.allocPrint(self.allocator, "{s}", .{json_str[50..74]}) catch {
+            @panic("Out of memory");
+        };
+        // It's a little bit scuffed, but it always works
     }
 
     pub fn updateDocument(self: Self, collection: *mongoc.mongoc_collection_t, id: []const u8, data: []const u8) MongoError!void {

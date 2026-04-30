@@ -5,7 +5,7 @@ const MongoClient = @import("mongo.zig").MongoClient;
 const Request = httpz.Request;
 const Response = httpz.Response;
 
-pub fn main() !void {
+pub fn main(init: std.process.Init) !void {
     var gpa = std.heap.DebugAllocator(.{}).init;
     const allocator = gpa.allocator();
     const mongo = try MongoClient.init(
@@ -17,6 +17,7 @@ pub fn main() !void {
 
     const port = 21991;
     var server = try httpz.Server(void).init(
+        init.io,
         allocator,
         .{ .address = .all(21991) },
         {},

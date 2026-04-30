@@ -80,17 +80,17 @@ pub fn getAllMenuItems(req: *Request, res: *Response) !void {
 }
 
 pub fn createMenuItem(req: *Request, res: *Response) !void {
-    res.status = 200;
+    res.status = 201;
 
     const request_body = req.body();
     if (request_body == null or request_body.?.len == 0) res.status = 204;
 
     status: switch (res.status) {
-        200 => {
+        201 => {
             const collection = try client.getCollection("menu");
             defer client.destroyCollection(collection);
 
-            client.insertDocument(collection, request_body.?) catch |err| {
+            const id = client.insertDocument(collection, request_body.?) catch |err| {
                 res.status = switch (err) {
                     error.InvalidDataFormat => 400,
                     error.InsertDocumentFailed => 417,
@@ -98,7 +98,8 @@ pub fn createMenuItem(req: *Request, res: *Response) !void {
                 };
                 continue :status res.status;
             };
-            try res.json(.{ .message = "Created the menu item" }, .{});
+            defer client.allocator.free(id);
+            try res.json(.{ .message = "Created the menu item", .id = id }, .{});
         },
         204 => try res.json(.{ .message = "There is no body present" }, .{}),
         400 => try res.json(.{ .message = "There was a problem parsing the body" }, .{}),

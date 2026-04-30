@@ -1,16 +1,30 @@
 FROM alpine:latest
 
-RUN apk add curl
-RUN apk add mongo-c-driver
-RUN curl -sO https://ziglang.org/download/0.15.2/zig-aarch64-linux-0.15.2.tar.xz
-RUN tar -xf zig-aarch64-linux-0.15.2.tar.xz -C /usr/local/bin
+RUN apk add curl cmake build-base openssl-dev
 
 WORKDIR /usr/local/app
+
+# Building MongoDB C Driver
+RUN curl -sL https://github.com/mongodb/mongo-c-driver/archive/refs/tags/2.2.3.tar.gz -o mongo-c-driver-2.2.3.tar.gz
+RUN tar xf mongo-c-driver-2.2.3.tar.gz
+
+RUN cmake -S mongo-c-driver-2.2.3 -B mongo-c-driver-2.2.3/_build \
+    -D CMAKE_BUILD_TYPE=RelWithDebInfo \
+    -D CMAKE_INSTALL_PREFIX=mongo-c-driver-2.2.3/_install \
+    -D BUILD_VERSION="2.2.3" \
+    -D ENABLE_MONGOC=ON \
+    -D ENABLE_SSL=OPENSSL
+RUN cmake --build mongo-c-driver-2.2.3/_build --config RelWithDebInfo --parallel
+RUN cmake --install mongo-c-driver-2.2.3/_build --config RelWithDebInfo
+
+# Getting Zig
+RUN curl -sO https://ziglang.org/download/0.16.0/zig-aarch64-linux-0.16.0.tar.xz
+RUN tar xf zig-aarch64-linux-0.16.0.tar.xz -C /usr/local/bin
 
 COPY mongo_libs mongo_libs
 COPY src src
 COPY build.zig .
 COPY build.zig.zon .
 
-CMD ["/usr/local/bin/zig-aarch64-linux-0.15.2/zig", "build", "run", "-Doptimize=ReleaseSafe"]
+CMD ["/usr/local/bin/zig-aarch64-linux-0.16.0/zig", "build", "run", "-Doptimize=ReleaseSafe"]
 EXPOSE 21991

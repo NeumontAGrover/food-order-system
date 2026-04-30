@@ -25,7 +25,7 @@
     .fingerprint = 0x1b2c3247bc01b0da, // Changing this has security and trust implications.
     // Tracks the earliest Zig version that the package considers to be a
     // supported use case.
-    .minimum_zig_version = "0.15.2",
+    .minimum_zig_version = "0.16.0",
     // This field is optional.
     // Each dependency must either provide a `url` and `hash`, or a `path`.
     // `zig build --fetch` can be used to fetch all dependencies of a package, recursively.
@@ -33,8 +33,8 @@
     // internet connectivity.
     .dependencies = .{
         .httpz = .{
-            .url = "git+https://github.com/karlseguin/http.zig?ref=master#af1df361d599dbc3f9534b0183a8b5e3fe2af83e",
-            .hash = "httpz-0.0.0-PNVzrMpOBwCS42DpyNnY8WTlwcuzannBeDLuqkUV8H7-",
+            .url = "git+https://github.com/karlseguin/http.zig?ref=master#9529d10cb7ef2d9a56e2e8e859afddabf6badf5c",
+            .hash = "httpz-0.0.0-PNVzrBu9BwC__muOxHYDIFGgKbhmsNWQHitrR0BIweJY",
         },
     },
     .paths = .{

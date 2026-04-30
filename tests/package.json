@@ -5,11 +5,12 @@
     "@types/bun": "latest"
   },
   "peerDependencies": {
-    "typescript": "^5"
+    "typescript": "^6"
   },
   "private": true,
   "scripts": {
     "test": "bun run index.ts"
   },
-  "type": "module"
+  "type": "module",
+  "dependencies": {}
 }

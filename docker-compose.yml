@@ -1,17 +1,4 @@
 services:
-  # entrance-api:
-  #   build:
-  #     context: ./entrance-api
-  #     dockerfile: dockerfile
-  #   container_name: entrance-service
-  #   ports:
-  #     - 3000:3000
-  #   depends_on:
-  #     mongodb:
-  #       condition: service_healthy
-  #   networks:
-  #     - food-network
-
   menu:
     build:
       context: ./menu
@@ -121,6 +108,9 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/index.html:/etc/nginx/html/index.html:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - food-network
 networks:
