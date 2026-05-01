@@ -44,8 +44,8 @@ pub fn main() -> Nil {
         }
         Post, ["man", "order"] -> {
           case create_order(req, sql_client) {
-            Ok(_) -> {
-              create_message("Order added")
+            Ok(order_id) -> {
+              json.object([#("orderId", json.int(order_id))])
               |> create_response(200)
             }
             Error(err) -> err
@@ -118,13 +118,13 @@ pub fn main() -> Nil {
 fn create_order(
   req: Request(Connection),
   postgres_client: PostgresClient,
-) -> Result(Nil, Response(ResponseData)) {
+) -> Result(Int, Response(ResponseData)) {
   use token <- result.try(get_jwt_from_header(req.headers))
   try_or_message(
     postgres.create_order(postgres_client, token.uid),
     "An error occurred",
     500,
-    fn(_) { Ok(Nil) },
+    fn(order_id) { Ok(order_id) },
   )
 }
 
@@ -143,21 +143,12 @@ fn get_order(
 ) -> Result(Option(Order), Response(ResponseData)) {
   use token <- result.try(get_jwt_from_header(req.headers))
   use order_id <- result.try(parse_path(order_id_str))
-  case token.uid == order_id || token.admin {
-    True -> {
-      try_or_message(
-        postgres.get_order(postgres_client, token.uid, order_id),
-        "An error occurred",
-        500,
-        fn(order) { Ok(order) },
-      )
-    }
-    False -> {
-      create_message("Not allowed to view that order")
-      |> create_response(401)
-      |> Error()
-    }
-  }
+  try_or_message(
+    postgres.get_order(postgres_client, token.uid, order_id),
+    "An error occurred",
+    500,
+    fn(order) { Ok(order) },
+  )
 }
 
 fn update_order(
@@ -174,26 +165,17 @@ fn update_order(
 
   use token <- result.try(get_jwt_from_header(req.headers))
   use order_id <- result.try(parse_path(order_id_str))
-  case token.uid == order_id || token.admin {
-    True -> {
-      try_or_message(
-        postgres.update_order(
-          postgres_client,
-          token.uid,
-          order_id,
-          string.lowercase(body_result.1),
-        ),
-        "An error occurred",
-        500,
-        fn(_) { Ok(Nil) },
-      )
-    }
-    False -> {
-      create_message("Not allowed to update that order")
-      |> create_response(401)
-      |> Error()
-    }
-  }
+  try_or_message(
+    postgres.update_order(
+      postgres_client,
+      token.uid,
+      order_id,
+      string.lowercase(body_result.1),
+    ),
+    "An error occurred",
+    500,
+    fn(_) { Ok(Nil) },
+  )
 }
 
 fn delete_order(
@@ -203,21 +185,12 @@ fn delete_order(
 ) -> Result(Nil, Response(ResponseData)) {
   use token <- result.try(get_jwt_from_header(req.headers))
   use order_id <- result.try(parse_path(order_id_str))
-  case token.uid == order_id || token.admin {
-    True -> {
-      try_or_message(
-        postgres.delete_order(postgres_client, token.uid, order_id),
-        "An error occurred",
-        500,
-        fn(_) { Ok(Nil) },
-      )
-    }
-    False -> {
-      create_message("Not allowed to delete that order")
-      |> create_response(401)
-      |> Error()
-    }
-  }
+  try_or_message(
+    postgres.delete_order(postgres_client, token.uid, order_id),
+    "An error occurred",
+    500,
+    fn(_) { Ok(Nil) },
+  )
 }
 
 fn create_message(message: String) -> Json {

@@ -315,7 +315,15 @@ impl ServerInstance {
     }
     
     pub async fn get_user(&mut self, req: Request<hyper::body::Incoming>) -> ServerResult {
-        let uid = req.uri().path().split('/').collect::<Vec<&str>>()[3].parse::<i32>().unwrap();
+        let mut uid = {
+            let segments = 
+            req.uri().path().split('/').collect::<Vec<&str>>();
+            if segments.len() == 4 {
+                segments[3].parse::<i32>().unwrap()
+            } else {
+                -1
+            }
+        };
 
         let mut response = Response::new(self.create_message(""));
         let status = response.status_mut();
@@ -326,13 +334,19 @@ impl ServerInstance {
         match token {
             Some(token) => {
                 let claims = match jwt::decode_jwt(token.as_ref()) {
-                    Ok(claims) => Some(claims),
+                    Ok(claims) => {
+                        if uid == -1 {
+                            uid = claims.uid;
+                        }
+
+                        Some(claims)
+                    },
                     Err(_) => {
                         *status = StatusCode::FORBIDDEN;
                         None
                     },
                 };
-                
+
                 match claims {
                     Some(claims) => {
                         let is_expired = self.redis.is_token_expired(claims.uid).await; 
@@ -360,7 +374,7 @@ impl ServerInstance {
                 let json = serde_json::to_string(&user).unwrap();
 
                 response = Response::new(
-                    self.create_message(format!("{{\"users\":\"{}\"}}", json))
+                    self.create_message(format!("{{\"users\":{} }}", json))
                 );
             },
             StatusCode::UNAUTHORIZED => {
@@ -389,7 +403,15 @@ impl ServerInstance {
     }
     
     pub async fn update_user(&mut self, req: Request<hyper::body::Incoming>) -> ServerResult {
-        let uid = req.uri().path().split('/').collect::<Vec<&str>>()[3].parse::<i32>().unwrap();
+        let mut uid = {
+            let segments = 
+            req.uri().path().split('/').collect::<Vec<&str>>();
+            if segments.len() == 4 {
+                segments[3].parse::<i32>().unwrap()
+            } else {
+                -1
+            }
+        };
 
         let mut response = Response::new(self.create_message(""));
         let status = response.status_mut();
@@ -400,7 +422,13 @@ impl ServerInstance {
         match token {
             Some(token) => {
                 let claims = match jwt::decode_jwt(token.as_ref()) {
-                    Ok(claims) => Some(claims),
+                    Ok(claims) => {
+                        if uid == -1 {
+                            uid = claims.uid;
+                        }
+
+                        Some(claims)
+                    },
                     Err(_) => {
                         *status = StatusCode::FORBIDDEN;
                         None
@@ -490,7 +518,15 @@ impl ServerInstance {
     }
     
     pub async fn delete_user(&mut self, req: Request<hyper::body::Incoming>) -> ServerResult {
-        let uid = req.uri().path().split('/').collect::<Vec<&str>>()[3].parse::<i32>().unwrap();
+        let mut uid = {
+            let segments = 
+            req.uri().path().split('/').collect::<Vec<&str>>();
+            if segments.len() == 4 {
+                segments[3].parse::<i32>().unwrap()
+            } else {
+                -1
+            }
+        };
 
         let mut response = Response::new(self.create_message(""));
         let status = response.status_mut();
@@ -501,7 +537,13 @@ impl ServerInstance {
         match token {
             Some(token) => {
                 let claims = match jwt::decode_jwt(token.as_ref()) {
-                    Ok(claims) => Some(claims),
+                    Ok(claims) => {
+                        if uid == -1 {
+                            uid = claims.uid;
+                        }
+
+                        Some(claims)
+                    },
                     Err(_) => {
                         *status = StatusCode::FORBIDDEN;
                         None

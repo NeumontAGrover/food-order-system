@@ -172,29 +172,35 @@ pub fn get_orders(client: PostgresClient, user_id: Int) -> List(Order) {
                 ))
               })
             use status <- decode.field(2, decode.string)
-            use item_name <- decode.field(3, decode.string)
-            use item_price <- decode.field(4, decode.float)
-            use item_quantity <- decode.field(5, decode.int)
-            decode.success(
-              Order(order_id, user_id, order_date, status, [
-                Item(user_id, item_name, item_price, item_quantity),
-              ]),
-            )
+            use item_name <- decode.field(3, decode.optional(decode.string))
+            use item_price <- decode.field(4, decode.optional(decode.float))
+            use item_quantity <- decode.field(5, decode.optional(decode.int))
+            let item_list = case item_name, item_price, item_quantity {
+              Some(name), Some(price), Some(quantity) -> [
+                Item(user_id, name, price, quantity),
+              ]
+              _, _, _ -> []
+            }
+
+            decode.success(Order(
+              order_id,
+              user_id,
+              order_date,
+              status,
+              item_list,
+            ))
           })
 
-        let assert Ok(item) = list.first(order.items)
         let new_dict = case dict.get(om, order.id) {
           Ok(o) -> {
-            let new_items = list.append(o.items, [item])
+            let new_items = list.append(o.items, order.items)
             let new_order =
               Order(order.id, user_id, order.date, order.status, new_items)
             dict.insert(om, order.id, new_order)
           }
           Error(_) -> {
             let order =
-              Order(order.id, user_id, order.date, order.status, [
-                item,
-              ])
+              Order(order.id, user_id, order.date, order.status, order.items)
             dict.insert(om, order.id, order)
           }
         }
@@ -320,15 +326,13 @@ pub fn delete_order(
   order_id: Int,
 ) -> Result(Nil, PglError) {
   let item_sql = "
-  DELETE *
-  FROM order_items
+  DELETE FROM order_items
   WHERE order_id = " <> int.to_string(order_id)
 
   let _ = result.map(pgl.execute(item_sql, client.client), fn(_) { Nil })
 
   let order_sql = "
-  DELETE *
-  FROM orders
+  DELETE FROM orders
   WHERE user_id = " <> int.to_string(user_id) <> " AND order_id = " <> int.to_string(
       order_id,
     )
